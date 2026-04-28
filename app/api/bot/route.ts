@@ -54,7 +54,7 @@ async function handleCallbackQuery(callbackQuery: any, perfil: any) {
     const [_, categoria, monto, ...conceptoParts] = data.split('_');
     const concepto = conceptoParts.join('_');
     const palabraClave = concepto.split(' ')[0].toLowerCase();
-    
+
     // 1. Aprender palabra clave
     await supabase.from('diccionario_categorias').insert({
       user_id: userId,
@@ -77,22 +77,22 @@ async function handleCallbackQuery(callbackQuery: any, perfil: any) {
   } else if (data === 'cierre_ahorrar') {
     const semana = await getActiveWeek(userId);
     if (!semana) return;
-    
+
     const sobrante = Number(semana.saldo_sobrante_final);
     // Añadir a ahorros
     const { data: ahorro } = await supabase.from('ahorros').select('*').eq('user_id', userId).single();
     if (ahorro) {
-      await supabase.from('ahorros').update({ 
+      await supabase.from('ahorros').update({
         monto_total_acumulado: Number(ahorro.monto_total_acumulado) + sobrante,
         ultima_actualizacion: new Date().toISOString()
       }).eq('user_id', userId);
     } else {
       await supabase.from('ahorros').insert({ user_id: userId, monto_total_acumulado: sobrante });
     }
-    
+
     // Cerrar semana actual
     await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
-    
+
     // Abrir nueva semana con presupuesto fijo
     await supabase.from('semanas').insert({
       user_id: userId,
@@ -105,12 +105,12 @@ async function handleCallbackQuery(callbackQuery: any, perfil: any) {
   } else if (data === 'cierre_acumular') {
     const semana = await getActiveWeek(userId);
     if (!semana) return;
-    
+
     const sobrante = Number(semana.saldo_sobrante_final);
-    
+
     // Cerrar semana actual
     await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
-    
+
     // Abrir nueva semana con presupuesto fijo + sobrante
     const nuevoPpto = Number(perfil.presupuesto_semanal_fijo) + sobrante;
     await supabase.from('semanas').insert({
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 
     const messageObj = body.callback_query ? body.callback_query.message : body.message;
     const fromObj = body.callback_query ? body.callback_query.from : body.message?.from;
-    
+
     if (!messageObj || !fromObj) return NextResponse.json({ ok: true });
 
     const chatId = messageObj.chat.id;
@@ -177,18 +177,18 @@ export async function POST(req: Request) {
         `📈 <b>Para sumar ingresos:</b>\nSi conseguiste dinero extra o es tu día de pago, dímelo para sumarlo a tu presupuesto de esta semana.\n<i>Ejemplo: "Recibí 500" o "/ingreso 500"</i>\n\n` +
         `📊 <b>Revisa tus números:</b>\nUsa /saldo para ver cuánto te queda disponible hoy, y usa /cerrar_semana al final de tu ciclo para hacer el corte y acumular tus ahorros.\n\n` +
         `¡Estoy listo para registrar tus movimientos! 🚀`;
-      
+
       await sendMessage(chatId, bienvenida);
       // Crear semana si no tiene una activa
       const semana = await getActiveWeek(userId);
       if (!semana) {
-         await supabase.from('semanas').insert({
-            user_id: userId,
-            fecha_fin: getFechaFin(),
-            presupuesto_actual: perfil.presupuesto_semanal_fijo,
-            estado: 'abierta'
-         });
-         await sendMessage(chatId, `📅 <b>Finvia:</b> He creado tu primera semana con presupuesto de $${perfil.presupuesto_semanal_fijo}.`);
+        await supabase.from('semanas').insert({
+          user_id: userId,
+          fecha_fin: getFechaFin(),
+          presupuesto_actual: perfil.presupuesto_semanal_fijo,
+          estado: 'abierta'
+        });
+        await sendMessage(chatId, `📅 <b>Finvia:</b> He creado tu primera semana con presupuesto de $${perfil.presupuesto_semanal_fijo}.`);
       }
       return NextResponse.json({ ok: true });
     }
@@ -202,10 +202,10 @@ export async function POST(req: Request) {
         if (semana) {
           const nuevoPresupuesto = Number(semana.presupuesto_actual) + monto;
           await supabase.from('semanas').update({ presupuesto_actual: nuevoPresupuesto }).eq('id', semana.id);
-          
+
           const totalGastos = await getTotalExpenses(semana.id);
           const disponible = nuevoPresupuesto - totalGastos;
-          
+
           await sendMessage(chatId, `💵 <b>Finvia:</b> Ingreso extra de $${monto} registrado. \nTu nuevo total disponible es: $${disponible}.`);
         } else {
           await sendMessage(chatId, "⚠️ <b>Finvia:</b> No tienes una semana abierta.");
@@ -246,7 +246,7 @@ export async function POST(req: Request) {
 
       const gastos = await getTotalExpenses(semana.id);
       const sobrante = Number(semana.presupuesto_actual) - gastos;
-      
+
       await supabase.from('semanas').update({ saldo_sobrante_final: sobrante }).eq('id', semana.id);
 
       if (sobrante > 0) {
@@ -260,7 +260,7 @@ export async function POST(req: Request) {
         // Castigo
         const deficit = Math.abs(sobrante);
         await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
-        
+
         const nuevoPresupuesto = Number(perfil.presupuesto_semanal_fijo) - deficit;
         await supabase.from('semanas').insert({
           user_id: userId,
@@ -271,11 +271,11 @@ export async function POST(req: Request) {
         await sendMessage(chatId, `📉 <b>Finvia - Cierre Semanal:</b>\nTe excediste por $${deficit}. \n⚠️ <b>Castigo:</b> Empezamos esta nueva semana con menos dinero para compensar el exceso anterior. \nNuevo presupuesto inicial: $${nuevoPresupuesto}.`);
       } else {
         await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
-        await supabase.from('semanas').insert({ 
-          user_id: userId, 
+        await supabase.from('semanas').insert({
+          user_id: userId,
           fecha_fin: getFechaFin(),
-          presupuesto_actual: perfil.presupuesto_semanal_fijo, 
-          estado: 'abierta' 
+          presupuesto_actual: perfil.presupuesto_semanal_fijo,
+          estado: 'abierta'
         });
         await sendMessage(chatId, `⚖️ <b>Finvia - Cierre Semanal:</b>\nQuedaste en $0 exactos. \nSe ha iniciado una nueva semana con tu presupuesto base de $${perfil.presupuesto_semanal_fijo}.`);
       }
@@ -291,15 +291,15 @@ export async function POST(req: Request) {
 
       const semana = await getActiveWeek(userId);
       if (!semana) {
-         await sendMessage(chatId, "⚠️ <b>Finvia:</b> No tienes una semana activa.");
-         return NextResponse.json({ ok: true });
+        await sendMessage(chatId, "⚠️ <b>Finvia:</b> No tienes una semana activa.");
+        return NextResponse.json({ ok: true });
       }
 
       const totalGastos = await getTotalExpenses(semana.id);
       const disponible = Number(semana.presupuesto_actual) - totalGastos;
 
       if (disponible < monto) {
-         await sendMessage(chatId, `🚨 <b>ALERTA FINVIA:</b> Este gasto de $${monto} excede tu saldo disponible ($${disponible}).`);
+        await sendMessage(chatId, `🚨 <b>ALERTA FINVIA:</b> Este gasto de $${monto} excede tu saldo disponible ($${disponible}).`);
       }
 
       const { data: dicc } = await supabase.from('diccionario_categorias').select('categoria').eq('user_id', userId).eq('palabra_clave', palabraClave).single();
@@ -315,10 +315,10 @@ export async function POST(req: Request) {
         await sendMessage(chatId, `💸 <b>Finvia:</b> Gasto de $${monto} registrado en ${dicc.categoria}. \nQuedan: $${disponible - monto}.`);
       } else {
         const categorias = ["Comida", "Transporte", "Ocio", "Hogar", "Otros"];
-        const botones = categorias.map(c => ({ text: c, callback_data: `cat_${c}_${monto}_${concepto.substring(0,20)}` }));
+        const botones = categorias.map(c => ({ text: c, callback_data: `cat_${c}_${monto}_${concepto.substring(0, 20)}` }));
         const keyboard = [];
         for (let i = 0; i < botones.length; i += 2) {
-           keyboard.push(botones.slice(i, i + 2));
+          keyboard.push(botones.slice(i, i + 2));
         }
 
         await sendMessage(chatId, `🤔 <b>Finvia:</b> No conozco la categoría para "${concepto}". ¿Dónde lo clasifico?`, {
