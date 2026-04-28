@@ -2,7 +2,7 @@ import Dashboard from '@/components/Dashboard';
 import { supabase } from '@/lib/supabase';
 
 export default async function DashboardPage() {
-  const telegramId = process.env.TELEGRAM_OWNER_ID ? parseInt(process.env.TELEGRAM_OWNER_ID) : 0;
+  const telegramId = process.env.MY_TELEGRAM_ID ? parseInt(process.env.MY_TELEGRAM_ID) : 0;
   
   // Buscar el UUID del usuario basado en el telegram_id
   const { data: perfil } = await supabase
