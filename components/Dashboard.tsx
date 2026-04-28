@@ -76,7 +76,7 @@ export default function Dashboard({ userId }: { userId: string }) {
   if (!semana) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 text-center">
-        <div className="glass-panel">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl">
           <h2 className="text-2xl font-bold mb-2">No hay semana activa</h2>
           <p className="text-gray-300">Abre tu Telegram y envía /start al bot para comenzar a usar Finvia.</p>
         </div>
@@ -103,7 +103,7 @@ export default function Dashboard({ userId }: { userId: string }) {
           </h1>
           <p className="text-gray-400 mt-1">Gestión Inteligente de Finanzas Personales</p>
         </div>
-        <div className="flex items-center gap-2 glass-panel py-2 px-4 rounded-full">
+        <div className="flex items-center gap-2 bg-white/5 backdrop-blur-lg border border-white/10 shadow-xl py-2 px-4 rounded-full">
           <Activity className="w-5 h-5 text-green-400 animate-pulse" />
           <span className="text-sm font-medium">Live</span>
         </div>
@@ -111,7 +111,7 @@ export default function Dashboard({ userId }: { userId: string }) {
 
       {/* Tarjetas Principales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass-panel flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
           <div className="bg-cyan-500/20 p-4 rounded-full mb-4">
             <Wallet className="w-8 h-8 text-cyan-400" />
           </div>
@@ -121,7 +121,7 @@ export default function Dashboard({ userId }: { userId: string }) {
           </p>
         </div>
 
-        <div className="glass-panel flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
           <div className="bg-rose-500/20 p-4 rounded-full mb-4">
             <TrendingDown className="w-8 h-8 text-rose-400" />
           </div>
@@ -131,7 +131,7 @@ export default function Dashboard({ userId }: { userId: string }) {
           </p>
         </div>
 
-        <div className="glass-panel flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center text-center hover:scale-105 transition-transform duration-300">
           <div className="bg-emerald-500/20 p-4 rounded-full mb-4">
             <PiggyBank className="w-8 h-8 text-emerald-400" />
           </div>
@@ -144,7 +144,7 @@ export default function Dashboard({ userId }: { userId: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Gráfica */}
-        <div className="glass-panel h-96 flex flex-col">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl h-96 flex flex-col">
           <h3 className="text-xl font-bold mb-6">Comparativa Semanal</h3>
           <div className="flex-1 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -166,7 +166,7 @@ export default function Dashboard({ userId }: { userId: string }) {
         </div>
 
         {/* Últimos Gastos */}
-        <div className="glass-panel flex flex-col h-96">
+        <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 shadow-xl flex flex-col h-96">
           <h3 className="text-xl font-bold mb-4">Últimos Gastos</h3>
           <div className="overflow-y-auto flex-1 pr-2 space-y-3 custom-scrollbar">
             {gastos.length === 0 ? (
