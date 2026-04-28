@@ -19,8 +19,14 @@ async function sendMessage(chatId: number, text: string, replyMarkup?: any) {
   });
 }
 
+function getFechaFin() {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split('T')[0];
+}
+
 // Helpers de BD
-async function getActiveWeek(userId: number) {
+async function getActiveWeek(userId: string) {
   const { data } = await supabase
     .from('semanas')
     .select('*')
@@ -39,21 +45,17 @@ async function getTotalExpenses(semanaId: string) {
 }
 
 // Manejar Callback Queries (Botones de Categoría o Cierre)
-async function handleCallbackQuery(callbackQuery: any) {
+async function handleCallbackQuery(callbackQuery: any, perfil: any) {
   const chatId = callbackQuery.message.chat.id;
-  const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
-
-  // Verify owner
-  if (userId !== OWNER_ID && OWNER_ID !== 0) return;
+  const userId = perfil.user_id;
 
   if (data.startsWith('cat_')) {
-    // cat_Categoria_Monto_Concepto
     const [_, categoria, monto, ...conceptoParts] = data.split('_');
     const concepto = conceptoParts.join('_');
+    const palabraClave = concepto.split(' ')[0].toLowerCase();
     
     // 1. Aprender palabra clave
-    const palabraClave = concepto.split(' ')[0].toLowerCase();
     await supabase.from('diccionario_categorias').insert({
       user_id: userId,
       palabra_clave: palabraClave,
@@ -64,6 +66,7 @@ async function handleCallbackQuery(callbackQuery: any) {
     const semana = await getActiveWeek(userId);
     if (semana) {
       await supabase.from('gastos').insert({
+        user_id: userId,
         semana_id: semana.id,
         concepto: concepto,
         monto: Number(monto),
@@ -75,11 +78,14 @@ async function handleCallbackQuery(callbackQuery: any) {
     const semana = await getActiveWeek(userId);
     if (!semana) return;
     
-    const sobrante = Number(semana.saldo_sobrante);
+    const sobrante = Number(semana.saldo_sobrante_final);
     // Añadir a ahorros
     const { data: ahorro } = await supabase.from('ahorros').select('*').eq('user_id', userId).single();
     if (ahorro) {
-      await supabase.from('ahorros').update({ monto_total_acumulado: Number(ahorro.monto_total_acumulado) + sobrante }).eq('user_id', userId);
+      await supabase.from('ahorros').update({ 
+        monto_total_acumulado: Number(ahorro.monto_total_acumulado) + sobrante,
+        ultima_actualizacion: new Date().toISOString()
+      }).eq('user_id', userId);
     } else {
       await supabase.from('ahorros').insert({ user_id: userId, monto_total_acumulado: sobrante });
     }
@@ -88,36 +94,32 @@ async function handleCallbackQuery(callbackQuery: any) {
     await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
     
     // Abrir nueva semana con presupuesto fijo
-    const { data: perfil } = await supabase.from('perfiles').select('presupuesto_semanal_fijo').eq('user_id', userId).single();
-    if (perfil) {
-      await supabase.from('semanas').insert({
-        user_id: userId,
-        presupuesto_actual: perfil.presupuesto_semanal_fijo,
-        estado: 'abierta'
-      });
-      await sendMessage(chatId, `💰 <b>Finvia:</b> $${sobrante} guardados en tus ahorros. ¡Nueva semana iniciada con $${perfil.presupuesto_semanal_fijo}!`);
-    }
+    await supabase.from('semanas').insert({
+      user_id: userId,
+      fecha_fin: getFechaFin(),
+      presupuesto_actual: perfil.presupuesto_semanal_fijo,
+      estado: 'abierta'
+    });
+    await sendMessage(chatId, `💰 <b>Finvia:</b> $${sobrante} guardados en tus ahorros. ¡Nueva semana iniciada con $${perfil.presupuesto_semanal_fijo}!`);
 
   } else if (data === 'cierre_acumular') {
     const semana = await getActiveWeek(userId);
     if (!semana) return;
     
-    const sobrante = Number(semana.saldo_sobrante);
+    const sobrante = Number(semana.saldo_sobrante_final);
     
     // Cerrar semana actual
     await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
     
     // Abrir nueva semana con presupuesto fijo + sobrante
-    const { data: perfil } = await supabase.from('perfiles').select('presupuesto_semanal_fijo').eq('user_id', userId).single();
-    if (perfil) {
-      const nuevoPpto = Number(perfil.presupuesto_semanal_fijo) + sobrante;
-      await supabase.from('semanas').insert({
-        user_id: userId,
-        presupuesto_actual: nuevoPpto,
-        estado: 'abierta'
-      });
-      await sendMessage(chatId, `📈 <b>Finvia:</b> Sobrante acumulado. ¡Nueva semana iniciada con un súper presupuesto de $${nuevoPpto}!`);
-    }
+    const nuevoPpto = Number(perfil.presupuesto_semanal_fijo) + sobrante;
+    await supabase.from('semanas').insert({
+      user_id: userId,
+      fecha_fin: getFechaFin(),
+      presupuesto_actual: nuevoPpto,
+      estado: 'abierta'
+    });
+    await sendMessage(chatId, `📈 <b>Finvia:</b> Sobrante acumulado. ¡Nueva semana iniciada con un súper presupuesto de $${nuevoPpto}!`);
   }
 
   // Answer callback query to remove loading state
@@ -132,46 +134,59 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    if (body.callback_query) {
-      await handleCallbackQuery(body.callback_query);
-      return NextResponse.json({ ok: true });
-    }
+    const messageObj = body.callback_query ? body.callback_query.message : body.message;
+    const fromObj = body.callback_query ? body.callback_query.from : body.message?.from;
+    
+    if (!messageObj || !fromObj) return NextResponse.json({ ok: true });
 
-    if (!body.message || !body.message.text) return NextResponse.json({ ok: true });
+    const chatId = messageObj.chat.id;
+    const telegramId = fromObj.id;
 
-    const chatId = body.message.chat.id;
-    const userId = body.message.from.id;
-    const text = body.message.text.trim();
-
-    if (OWNER_ID !== 0 && userId !== OWNER_ID) {
+    // Verificar si es el dueño
+    if (OWNER_ID !== 0 && telegramId !== OWNER_ID) {
       await sendMessage(chatId, "⛔ <b>Finvia:</b> Acceso denegado. No eres el dueño autorizado.");
       return NextResponse.json({ ok: true });
     }
 
-    const { data: perfil } = await supabase.from('perfiles').select('*').eq('user_id', userId).single();
+    // Buscar el perfil asociado a este telegram_id
+    const { data: perfil } = await supabase.from('perfiles').select('*').eq('telegram_id', telegramId).single();
 
-    if (text.startsWith('/start')) {
-      if (!perfil) {
-        // Init profile with a default or ask them
-        await supabase.from('perfiles').insert({ user_id: userId, presupuesto_semanal_fijo: 1000 });
-        await supabase.from('semanas').insert({ user_id: userId, presupuesto_actual: 1000 });
-        await sendMessage(chatId, "👋 <b>Finvia:</b> ¡Bienvenido! He creado tu perfil con un presupuesto inicial de $1000. Puedes cambiarlo luego. Registra tus gastos o ingresos enviando mensajes.");
-      } else {
-        await sendMessage(chatId, "⚡ <b>Finvia:</b> Ya estás registrado. ¡Sigamos gestionando tus finanzas!");
+    if (!perfil) {
+      await sendMessage(chatId, "⚠️ <b>Finvia:</b> No encontré tu perfil. Asegúrate de haberte registrado en la web y vinculado tu Telegram ID.");
+      return NextResponse.json({ ok: true });
+    }
+
+    const userId = perfil.user_id;
+
+    if (body.callback_query) {
+      await handleCallbackQuery(body.callback_query, perfil);
+      return NextResponse.json({ ok: true });
+    }
+
+    const text = body.message.text?.trim() || "";
+    if (!text) return NextResponse.json({ ok: true });
+    const textLower = text.toLowerCase();
+
+    // ---------------------------------------------------------
+    // COMANDOS
+    // ---------------------------------------------------------
+    if (textLower.startsWith('/start')) {
+      await sendMessage(chatId, `👋 <b>Finvia:</b> ¡Bienvenido de nuevo, ${perfil.nombre_completo || 'Usuario'}! Sigamos gestionando tus finanzas.`);
+      // Crear semana si no tiene una activa
+      const semana = await getActiveWeek(userId);
+      if (!semana) {
+         await supabase.from('semanas').insert({
+            user_id: userId,
+            fecha_fin: getFechaFin(),
+            presupuesto_actual: perfil.presupuesto_semanal_fijo,
+            estado: 'abierta'
+         });
+         await sendMessage(chatId, `📅 <b>Finvia:</b> He creado tu primera semana con presupuesto de $${perfil.presupuesto_semanal_fijo}.`);
       }
       return NextResponse.json({ ok: true });
     }
 
-    if (!perfil) {
-      await sendMessage(chatId, "⚠️ <b>Finvia:</b> Por favor envía /start primero.");
-      return NextResponse.json({ ok: true });
-    }
-
-    const textLower = text.toLowerCase();
-
-    // ---------------------------------------------------------
     // B. INGRESOS EXTRAS
-    // ---------------------------------------------------------
     if (textLower.startsWith('/ingreso') || textLower.startsWith('recibí') || textLower.startsWith('recibi')) {
       const match = text.match(/(\d+(\.\d+)?)/);
       if (match) {
@@ -194,9 +209,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // ---------------------------------------------------------
-    // COMANDOS DE INFORMACIÓN
-    // ---------------------------------------------------------
+    // ESTADO
     if (textLower.startsWith('/saldo')) {
       const semana = await getActiveWeek(userId);
       if (semana) {
@@ -216,6 +229,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    // CIERRE SEMANAL
     if (textLower.startsWith('/cerrar_semana')) {
       const semana = await getActiveWeek(userId);
       if (!semana) {
@@ -226,8 +240,7 @@ export async function POST(req: Request) {
       const gastos = await getTotalExpenses(semana.id);
       const sobrante = Number(semana.presupuesto_actual) - gastos;
       
-      // Update sobrante in DB
-      await supabase.from('semanas').update({ saldo_sobrante: sobrante }).eq('id', semana.id);
+      await supabase.from('semanas').update({ saldo_sobrante_final: sobrante }).eq('id', semana.id);
 
       if (sobrante > 0) {
         await sendMessage(chatId, `🎉 <b>Finvia - Cierre Semanal:</b>\n¡Felicidades! Te sobraron <b>$${sobrante}</b>. ¿Qué deseas hacer con ellos?`, {
@@ -244,21 +257,25 @@ export async function POST(req: Request) {
         const nuevoPresupuesto = Number(perfil.presupuesto_semanal_fijo) - deficit;
         await supabase.from('semanas').insert({
           user_id: userId,
+          fecha_fin: getFechaFin(),
           presupuesto_actual: nuevoPresupuesto,
           estado: 'abierta'
         });
         await sendMessage(chatId, `📉 <b>Finvia - Cierre Semanal:</b>\nTe excediste por $${deficit}. \n⚠️ <b>Castigo:</b> Empezamos esta nueva semana con menos dinero para compensar el exceso anterior. \nNuevo presupuesto inicial: $${nuevoPresupuesto}.`);
       } else {
         await supabase.from('semanas').update({ estado: 'cerrada' }).eq('id', semana.id);
-        await supabase.from('semanas').insert({ user_id: userId, presupuesto_actual: perfil.presupuesto_semanal_fijo, estado: 'abierta' });
+        await supabase.from('semanas').insert({ 
+          user_id: userId, 
+          fecha_fin: getFechaFin(),
+          presupuesto_actual: perfil.presupuesto_semanal_fijo, 
+          estado: 'abierta' 
+        });
         await sendMessage(chatId, `⚖️ <b>Finvia - Cierre Semanal:</b>\nQuedaste en $0 exactos. \nSe ha iniciado una nueva semana con tu presupuesto base de $${perfil.presupuesto_semanal_fijo}.`);
       }
       return NextResponse.json({ ok: true });
     }
 
-    // ---------------------------------------------------------
     // A. GASTOS DIARIOS
-    // ---------------------------------------------------------
     const match = text.match(/(\d+(\.\d+)?)/);
     if (match) {
       const monto = Number(match[0]);
@@ -267,24 +284,22 @@ export async function POST(req: Request) {
 
       const semana = await getActiveWeek(userId);
       if (!semana) {
-         await sendMessage(chatId, "⚠️ <b>Finvia:</b> Crea una semana activa primero.");
+         await sendMessage(chatId, "⚠️ <b>Finvia:</b> No tienes una semana activa.");
          return NextResponse.json({ ok: true });
       }
 
       const totalGastos = await getTotalExpenses(semana.id);
       const disponible = Number(semana.presupuesto_actual) - totalGastos;
 
-      // Alerta de Saldo Negativo
       if (disponible < monto) {
          await sendMessage(chatId, `🚨 <b>ALERTA FINVIA:</b> Este gasto de $${monto} excede tu saldo disponible ($${disponible}).`);
       }
 
-      // Buscar categoría
       const { data: dicc } = await supabase.from('diccionario_categorias').select('categoria').eq('user_id', userId).eq('palabra_clave', palabraClave).single();
 
       if (dicc) {
-        // Registrar directo
         await supabase.from('gastos').insert({
+          user_id: userId,
           semana_id: semana.id,
           concepto: concepto,
           monto: monto,
@@ -292,10 +307,8 @@ export async function POST(req: Request) {
         });
         await sendMessage(chatId, `💸 <b>Finvia:</b> Gasto de $${monto} registrado en ${dicc.categoria}. \nQuedan: $${disponible - monto}.`);
       } else {
-        // Preguntar
         const categorias = ["Comida", "Transporte", "Ocio", "Hogar", "Otros"];
         const botones = categorias.map(c => ({ text: c, callback_data: `cat_${c}_${monto}_${concepto.substring(0,20)}` }));
-        // Agrupar en filas de 2
         const keyboard = [];
         for (let i = 0; i < botones.length; i += 2) {
            keyboard.push(botones.slice(i, i + 2));

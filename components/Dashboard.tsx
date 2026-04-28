@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Wallet, TrendingDown, PiggyBank, Activity } from 'lucide-react';
 
-export default function Dashboard({ userId }: { userId: number }) {
+export default function Dashboard({ userId }: { userId: string }) {
   const [semana, setSemana] = useState<any>(null);
   const [gastos, setGastos] = useState<any[]>([]);
   const [ahorros, setAhorros] = useState<number>(0);
