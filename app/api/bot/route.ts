@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-const OWNER_ID = parseInt(process.env.TELEGRAM_OWNER_ID || '0');
+const OWNER_ID = parseInt(process.env.MY_TELEGRAM_ID || '0');
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 // Helper para enviar mensajes
