@@ -171,7 +171,14 @@ export async function POST(req: Request) {
     // COMANDOS
     // ---------------------------------------------------------
     if (textLower.startsWith('/start')) {
-      await sendMessage(chatId, `👋 <b>Finvia:</b> ¡Bienvenido de nuevo, ${perfil.nombre_completo || 'Usuario'}! Sigamos gestionando tus finanzas.`);
+      const bienvenida = `👋 <b>Finvia:</b> ¡Bienvenido de nuevo, ${perfil.nombre_completo || 'Usuario'}!\n\n` +
+        `Soy tu asistente financiero personal. Aquí tienes un recordatorio rápido de cómo interactuar conmigo:\n\n` +
+        `📉 <b>Para registrar gastos:</b>\nSolo dime en qué gastaste y la cantidad. Si es una palabra nueva, te preguntaré a qué categoría pertenece.\n<i>Ejemplo: "Tacos 150" o "Gasolina 400"</i>\n\n` +
+        `📈 <b>Para sumar ingresos:</b>\nSi conseguiste dinero extra o es tu día de pago, dímelo para sumarlo a tu presupuesto de esta semana.\n<i>Ejemplo: "Recibí 500" o "/ingreso 500"</i>\n\n` +
+        `📊 <b>Revisa tus números:</b>\nUsa /saldo para ver cuánto te queda disponible hoy, y usa /cerrar_semana al final de tu ciclo para hacer el corte y acumular tus ahorros.\n\n` +
+        `¡Estoy listo para registrar tus movimientos! 🚀`;
+      
+      await sendMessage(chatId, bienvenida);
       // Crear semana si no tiene una activa
       const semana = await getActiveWeek(userId);
       if (!semana) {
